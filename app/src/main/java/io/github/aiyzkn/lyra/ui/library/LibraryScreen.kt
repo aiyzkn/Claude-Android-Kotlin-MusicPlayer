@@ -1,6 +1,7 @@
 package io.github.aiyzkn.lyra.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
@@ -55,6 +57,7 @@ fun LibraryContent(
     state: LibraryUiState,
     onRequestPermission: () -> Unit,
     onRetry: () -> Unit,
+    onPlay: (songs: List<Song>, index: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state) {
@@ -73,12 +76,16 @@ fun LibraryContent(
             onAction = onRetry,
             modifier = modifier,
         )
-        is LibraryUiState.Loaded -> LibraryTabs(state.library, modifier)
+        is LibraryUiState.Loaded -> LibraryTabs(state.library, onPlay, modifier)
     }
 }
 
 @Composable
-fun LibraryTabs(library: Library, modifier: Modifier = Modifier) {
+fun LibraryTabs(
+    library: Library,
+    onPlay: (songs: List<Song>, index: Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val tabs = LibraryTab.entries
     val pagerState = rememberPagerState(initialPage = LibraryTab.Songs.ordinal) { tabs.size }
     val scope = rememberCoroutineScope()
@@ -99,7 +106,7 @@ fun LibraryTabs(library: Library, modifier: Modifier = Modifier) {
             when (tabs[page]) {
                 LibraryTab.Artists -> ArtistList(library.artists)
                 LibraryTab.Albums -> AlbumGrid(library.albums)
-                LibraryTab.Songs -> SongList(library.songs)
+                LibraryTab.Songs -> SongList(library.songs, onPlay)
                 LibraryTab.Genres -> GenreList(library.genres)
             }
         }
@@ -107,13 +114,15 @@ fun LibraryTabs(library: Library, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SongList(songs: List<Song>) {
+private fun SongList(songs: List<Song>, onPlay: (songs: List<Song>, index: Int) -> Unit) {
     if (songs.isEmpty()) return Empty()
     LazyColumn(Modifier.fillMaxSize()) {
-        items(songs, key = { it.id }) { song ->
+        itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+            // 曲を押すと、曲の一覧全体を再生待ちにして、その曲から再生する
             Row(
                 headline = song.title,
                 supporting = "${song.artist} · ${formatDuration(song.durationMs)}",
+                onClick = { onPlay(songs, index) },
             )
         }
     }
@@ -184,8 +193,9 @@ private fun AlbumGrid(albums: List<Album>) {
 }
 
 @Composable
-private fun Row(headline: String, supporting: String) {
+private fun Row(headline: String, supporting: String, onClick: (() -> Unit)? = null) {
     ListItem(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         headlineContent = { Text(headline, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = { Text(supporting, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
@@ -233,5 +243,5 @@ private fun LibraryTabsPreview() {
         Song(1, "Blue", "Artist A", "Album X", 10, "Pop", 215_000, 1, null),
         Song(2, "Green", "Artist B", "Album Y", 11, "Rock", 3_725_000, 1, null),
     )
-    LyraTheme { LibraryTabs(Library.from(songs)) }
+    LyraTheme { LibraryTabs(Library.from(songs), onPlay = { _, _ -> }) }
 }

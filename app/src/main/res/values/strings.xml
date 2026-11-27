@@ -10,6 +10,12 @@
     <string name="retry">再読み込み</string>
     <string name="permission_rationale">端末の曲を一覧にするには、音楽とオーディオへのアクセスを許可してください</string>
     <string name="permission_grant">許可する</string>
+    <string name="action_play">再生</string>
+    <string name="action_pause">一時停止</string>
+    <string name="action_next">次の曲</string>
+    <string name="action_previous">前の曲</string>
+    <string name="action_shuffle">シャッフル</string>
+    <string name="action_repeat">リピート</string>
     <plurals name="song_count">
         <item quantity="one">%d 曲</item>
         <item quantity="other">%d 曲</item>
