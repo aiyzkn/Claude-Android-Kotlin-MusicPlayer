@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +28,7 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,12 +42,17 @@ import io.github.aiyzkn.lyra.data.Album
 import io.github.aiyzkn.lyra.data.Artist
 import io.github.aiyzkn.lyra.data.Genre
 import io.github.aiyzkn.lyra.data.Library
+import io.github.aiyzkn.lyra.data.PlaylistRef
 import io.github.aiyzkn.lyra.data.Song
+import io.github.aiyzkn.lyra.data.recentlyAdded
+import io.github.aiyzkn.lyra.data.resolveSongs
 import io.github.aiyzkn.lyra.ui.theme.LyraTheme
 import kotlinx.coroutines.launch
 
-/** ライブラリのタブ。Apollo の並び（アーティスト → アルバム → 曲 → ジャンル）に合わせる。 */
+/** ライブラリのタブ。Apollo の並び（プレイリスト → 最近再生 → アーティスト → アルバム → 曲 → ジャンル）に合わせる。 */
 enum class LibraryTab(val titleRes: Int) {
+    Playlists(R.string.tab_playlists),
+    Recent(R.string.tab_recent),
     Artists(R.string.tab_artists),
     Albums(R.string.tab_albums),
     Songs(R.string.tab_songs),
@@ -59,6 +66,7 @@ fun LibraryContent(
     onRetry: () -> Unit,
     onPlay: (songs: List<Song>, index: Int) -> Unit,
     modifier: Modifier = Modifier,
+    content: @Composable (Library) -> Unit = { LibraryTabs(it, UserLibraryUiState(), onPlay, SongActions.NONE, {}, {}) },
 ) {
     when (state) {
         LibraryUiState.NeedsPermission -> Message(
@@ -76,18 +84,26 @@ fun LibraryContent(
             onAction = onRetry,
             modifier = modifier,
         )
-        is LibraryUiState.Loaded -> LibraryTabs(state.library, onPlay, modifier)
+        is LibraryUiState.Loaded -> Box(modifier) { content(state.library) }
     }
 }
 
 @Composable
 fun LibraryTabs(
     library: Library,
+    user: UserLibraryUiState,
     onPlay: (songs: List<Song>, index: Int) -> Unit,
+    actions: SongActions,
+    onOpenPlaylist: (PlaylistRef) -> Unit,
+    onNewPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
+    // プレイリストを開いて戻ったときに同じタブに戻れるよう、呼び出し側で持てるようにする
+    pagerState: PagerState = rememberLibraryPagerState(),
 ) {
+    val favorites = remember(library, user.favoriteIds) { resolveSongs(user.favoriteIds, library.byId) }
+    val recentlyPlayed = remember(library, user.recentlyPlayedIds) { resolveSongs(user.recentlyPlayedIds, library.byId) }
+    val recentlyAddedCount = remember(library) { recentlyAdded(library.songs, nowEpochSeconds()).size }
     val tabs = LibraryTab.entries
-    val pagerState = rememberPagerState(initialPage = LibraryTab.Songs.ordinal) { tabs.size }
     val scope = rememberCoroutineScope()
     Column(modifier.fillMaxSize()) {
         PrimaryScrollableTabRow(
@@ -104,29 +120,73 @@ fun LibraryTabs(
         }
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (tabs[page]) {
+                LibraryTab.Playlists -> PlaylistsTab(
+                    favoritesCount = favorites.size,
+                    recentlyAddedCount = recentlyAddedCount,
+                    playlists = user.playlists,
+                    onOpen = onOpenPlaylist,
+                    onNew = onNewPlaylist,
+                )
+                LibraryTab.Recent -> SongList(
+                    recentlyPlayed,
+                    onPlay,
+                    actions,
+                    empty = stringResource(R.string.recent_empty),
+                )
                 LibraryTab.Artists -> ArtistList(library.artists)
                 LibraryTab.Albums -> AlbumGrid(library.albums)
-                LibraryTab.Songs -> SongList(library.songs, onPlay)
+                LibraryTab.Songs -> SongList(library.songs, onPlay, actions)
                 LibraryTab.Genres -> GenreList(library.genres)
             }
         }
     }
 }
 
+/** プレイリストを開いたときの中身。自動のものは、そのつど曲の一覧から組み立てる。 */
 @Composable
-private fun SongList(songs: List<Song>, onPlay: (songs: List<Song>, index: Int) -> Unit) {
-    if (songs.isEmpty()) return Empty()
-    LazyColumn(Modifier.fillMaxSize()) {
-        itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
-            // 曲を押すと、曲の一覧全体を再生待ちにして、その曲から再生する
-            Row(
-                headline = song.title,
-                supporting = "${song.artist} · ${formatDuration(song.durationMs)}",
-                onClick = { onPlay(songs, index) },
+fun PlaylistContent(
+    playlist: PlaylistRef,
+    library: Library,
+    user: UserLibraryUiState,
+    userSongIds: List<Long>,
+    onPlay: (songs: List<Song>, index: Int) -> Unit,
+    actions: SongActions,
+    onRemoveAt: (index: Int) -> Unit,
+) {
+    when (playlist) {
+        PlaylistRef.Favorites -> SongList(
+            remember(library, user.favoriteIds) { resolveSongs(user.favoriteIds, library.byId) },
+            onPlay,
+            actions,
+            empty = stringResource(R.string.favorites_empty),
+        )
+        PlaylistRef.RecentlyAdded -> SongList(
+            remember(library) { recentlyAdded(library.songs, nowEpochSeconds()) },
+            onPlay,
+            actions,
+        )
+        is PlaylistRef.User -> {
+            // 端末から消えた曲を飛ばすと位置がずれるので、外すときは元の並びの位置を渡す
+            val present = remember(library, userSongIds) {
+                userSongIds.withIndex().filter { it.value in library.byId }
+            }
+            SongList(
+                present.map { library.byId.getValue(it.value) },
+                onPlay,
+                actions,
+                onRemoveAt = { shown -> onRemoveAt(present[shown].index) },
+                empty = stringResource(R.string.playlist_empty),
             )
         }
     }
 }
+
+/** ライブラリのタブの位置。最初は曲のタブ。 */
+@Composable
+fun rememberLibraryPagerState(): PagerState =
+    rememberPagerState(initialPage = LibraryTab.Songs.ordinal) { LibraryTab.entries.size }
+
+internal fun nowEpochSeconds(): Long = System.currentTimeMillis() / 1000
 
 @Composable
 private fun ArtistList(artists: List<Artist>) {
@@ -204,16 +264,6 @@ private fun Row(headline: String, supporting: String, onClick: (() -> Unit)? = n
 }
 
 @Composable
-private fun Empty() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            stringResource(R.string.library_empty),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun Message(text: String, action: String, onAction: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier
@@ -243,5 +293,5 @@ private fun LibraryTabsPreview() {
         Song(1, "Blue", "Artist A", "Album X", 10, "Pop", 215_000, 1, null),
         Song(2, "Green", "Artist B", "Album Y", 11, "Rock", 3_725_000, 1, null),
     )
-    LyraTheme { LibraryTabs(Library.from(songs), onPlay = { _, _ -> }) }
+    LyraTheme { LibraryTabs(Library.from(songs), UserLibraryUiState(), { _, _ -> }, SongActions.NONE, {}, {}) }
 }

@@ -38,6 +38,7 @@ class MediaStoreMusicLibrary @Inject constructor(
             add(MediaStore.Audio.Media.ALBUM_ID)
             add(MediaStore.Audio.Media.DURATION)
             add(MediaStore.Audio.Media.TRACK)
+            add(MediaStore.Audio.Media.DATE_ADDED)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) add(MediaStore.Audio.Media.GENRE)
         }.toTypedArray()
 
@@ -56,6 +57,7 @@ class MediaStoreMusicLibrary @Inject constructor(
             val albumId = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val duration = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val track = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+            val dateAdded = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val genre = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 c.getColumnIndexOrThrow(MediaStore.Audio.Media.GENRE)
             } else {
@@ -74,6 +76,7 @@ class MediaStoreMusicLibrary @Inject constructor(
                     // TRACK はディスクの番号を千の位に持つ（1001 = 1 枚目の 1 曲目）
                     trackNumber = c.getInt(track) % 1000,
                     uri = ContentUris.withAppendedId(collection, songId),
+                    dateAddedSec = c.getLong(dateAdded),
                 )
             }
         }

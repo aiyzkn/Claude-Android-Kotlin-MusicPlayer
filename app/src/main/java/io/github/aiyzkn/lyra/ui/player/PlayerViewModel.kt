@@ -25,6 +25,8 @@ import javax.inject.Inject
 
 /** 画面に出す再生の状態。何も読み込んでいないときは [title] が null。 */
 data class PlayerUiState(
+    /** いまの曲の `MediaStore` の ID。お気に入りの切り替えに使う。 */
+    val songId: Long? = null,
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
@@ -145,6 +147,7 @@ class PlayerViewModel @Inject constructor(
         val item: MediaItem? = player.currentMediaItem
         val meta = item?.mediaMetadata
         _state.value = PlayerUiState(
+            songId = item?.mediaId?.toLongOrNull(),
             title = meta?.title?.toString() ?: item?.let { "" },
             artist = meta?.artist?.toString(),
             album = meta?.albumTitle?.toString(),
