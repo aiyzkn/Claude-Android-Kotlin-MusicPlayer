@@ -45,6 +45,19 @@ data class PlayerUiState(
         get() = if (durationMs <= 0) 0f else (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
 }
 
+/** 再生待ちの 1 曲。同じ曲が何度も入りうるので、行の鍵は位置と組にする。 */
+data class QueueEntry(
+    val songId: Long?,
+    val title: String,
+    val artist: String?,
+)
+
+/** 再生待ちの並びと、いま鳴っている曲の位置（無ければ -1）。 */
+data class QueueUiState(
+    val items: List<QueueEntry> = emptyList(),
+    val currentIndex: Int = -1,
+)
+
 /** リピートの切り替えの順（Apollo と同じく、なし → 全曲 → 1 曲）。 */
 enum class RepeatMode(val media3: Int) {
     Off(Player.REPEAT_MODE_OFF),
@@ -71,12 +84,18 @@ class PlayerViewModel @Inject constructor(
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    private val _queue = MutableStateFlow(QueueUiState())
+    val queue: StateFlow<QueueUiState> = _queue.asStateFlow()
+
     private var controller: MediaController? = null
     private var progressJob: Job? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             publish(player)
+            if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+                publishQueue(player)
+            }
             if (player.isPlaying) startProgressUpdates() else progressJob?.cancel()
         }
     }
@@ -91,6 +110,7 @@ class PlayerViewModel @Inject constructor(
                 controller = c
                 c.addListener(listener)
                 publish(c)
+                publishQueue(c)
                 if (c.isPlaying) startProgressUpdates()
             },
             ContextCompat.getMainExecutor(context),
@@ -104,6 +124,42 @@ class PlayerViewModel @Inject constructor(
         c.setMediaItems(songs.map(Song::toMediaItem), index.coerceIn(songs.indices), 0L)
         c.prepare()
         c.play()
+    }
+
+    /** いまの曲の次に入れる。何も読み込んでいなければ、その曲から再生する。 */
+    fun playNext(song: Song) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) return play(listOf(song), 0)
+        c.addMediaItem(c.currentMediaItemIndex + 1, song.toMediaItem())
+    }
+
+    /** 再生待ちの末尾に足す。何も読み込んでいなければ、その曲から再生する。 */
+    fun addToQueue(song: Song) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) return play(listOf(song), 0)
+        c.addMediaItem(song.toMediaItem())
+    }
+
+    /** 再生待ちの [index] 番目の曲へ飛んで再生する。 */
+    fun playQueueItem(index: Int) {
+        val c = controller ?: return
+        if (index !in 0 until c.mediaItemCount) return
+        c.seekTo(index, 0L)
+        c.play()
+    }
+
+    fun moveQueueItem(from: Int, to: Int) {
+        val c = controller ?: return
+        val count = c.mediaItemCount
+        if (from == to || from !in 0 until count || to !in 0 until count) return
+        c.moveMediaItem(from, to)
+    }
+
+    /** 再生待ちから外す。鳴っている曲を外したら、次の曲へ進む（Media3 の既定の動き）。 */
+    fun removeQueueItem(index: Int) {
+        val c = controller ?: return
+        if (index !in 0 until c.mediaItemCount) return
+        c.removeMediaItem(index)
     }
 
     fun togglePlayPause() {
@@ -158,6 +214,20 @@ class PlayerViewModel @Inject constructor(
             hasNext = player.hasNextMediaItem(),
             shuffle = player.shuffleModeEnabled,
             repeat = RepeatMode.from(player.repeatMode),
+        )
+    }
+
+    private fun publishQueue(player: Player) {
+        _queue.value = QueueUiState(
+            items = (0 until player.mediaItemCount).map { i ->
+                val item = player.getMediaItemAt(i)
+                QueueEntry(
+                    songId = item.mediaId.toLongOrNull(),
+                    title = item.mediaMetadata.title?.toString().orEmpty(),
+                    artist = item.mediaMetadata.artist?.toString(),
+                )
+            },
+            currentIndex = if (player.mediaItemCount == 0) -1 else player.currentMediaItemIndex,
         )
     }
 

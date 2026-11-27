@@ -34,3 +34,18 @@ data class PlaylistSongEntity(
     val position: Int,
     val songId: Long,
 )
+
+/** 再生待ちの 1 曲（アプリを閉じても続きから聴けるように残す）。位置（0 から）で並べる。 */
+@Entity(tableName = "queue_items")
+data class QueueItemEntity(
+    @PrimaryKey val position: Int,
+    val songId: Long,
+)
+
+/** 再生待ちのどこまで聴いたか。1 行だけ（[id] は常に 0）。 */
+@Entity(tableName = "queue_state")
+data class QueueStateEntity(
+    @PrimaryKey val id: Int = 0,
+    val currentIndex: Int,
+    val positionMs: Long,
+)
