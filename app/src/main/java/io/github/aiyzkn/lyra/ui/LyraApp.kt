@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,16 +41,23 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.aiyzkn.lyra.R
+import io.github.aiyzkn.lyra.data.Album
+import io.github.aiyzkn.lyra.data.Library
 import io.github.aiyzkn.lyra.data.PlaylistRef
 import io.github.aiyzkn.lyra.data.Song
 import io.github.aiyzkn.lyra.data.audioPermission
+import io.github.aiyzkn.lyra.ui.library.AlbumDetail
+import io.github.aiyzkn.lyra.ui.library.ArtistDetail
 import io.github.aiyzkn.lyra.ui.library.ConfirmDeletePlaylistDialog
+import io.github.aiyzkn.lyra.ui.library.GenreDetail
 import io.github.aiyzkn.lyra.ui.library.LibraryContent
 import io.github.aiyzkn.lyra.ui.library.LibraryTabs
+import io.github.aiyzkn.lyra.ui.library.LibraryUiState
 import io.github.aiyzkn.lyra.ui.library.LibraryViewModel
 import io.github.aiyzkn.lyra.ui.library.PlaylistContent
 import io.github.aiyzkn.lyra.ui.library.PlaylistNameDialog
 import io.github.aiyzkn.lyra.ui.library.PlaylistPickerDialog
+import io.github.aiyzkn.lyra.ui.library.SearchScreen
 import io.github.aiyzkn.lyra.ui.library.SongActions
 import io.github.aiyzkn.lyra.ui.library.rememberLibraryPagerState
 import io.github.aiyzkn.lyra.ui.player.MiniPlayer
@@ -57,6 +65,15 @@ import io.github.aiyzkn.lyra.ui.player.NowPlayingScreen
 import io.github.aiyzkn.lyra.ui.player.PlayerViewModel
 import io.github.aiyzkn.lyra.ui.player.QueueScreen
 import kotlinx.coroutines.flow.flowOf
+
+/** ライブラリのタブの上に重ねて開く画面。 */
+private sealed interface Destination {
+    data class Playlist(val ref: PlaylistRef) : Destination
+    data class Artist(val name: String) : Destination
+    data class Album(val id: Long) : Destination
+    data class Genre(val name: String) : Destination
+    data object Search : Destination
+}
 
 /** プレイリストの名前のダイアログで、何をするか。 */
 private sealed interface NameRequest {
@@ -81,8 +98,24 @@ fun LyraApp(
     val queue by playerViewModel.queue.collectAsStateWithLifecycle()
     var nowPlayingOpen by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
-    // 画面の行き来は、詳細の画面を足す PR で Navigation にする。それまでは、開いているプレイリストを状態で持つ
-    var openPlaylist by remember { mutableStateOf<PlaylistRef?>(null) }
+    // 画面の行き来は、開いた画面の積み重ねで持つ（開くと積み、戻ると 1 つ外す）。
+    // 画面が少なく、引数が曲の一覧の中の値だけなので、Navigation は入れない
+    val backStack = remember { mutableStateListOf<Destination>() }
+    val top = backStack.lastOrNull()
+    val openPlaylist = (top as? Destination.Playlist)?.ref
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    fun open(destination: Destination) {
+        if (destination == Destination.Search) {
+            // 検索は 1 つだけ。開き直したら、前の検索の上に積んだ画面ごと閉じて入力を消す
+            val at = backStack.indexOf(Destination.Search)
+            if (at >= 0) backStack.subList(at, backStack.size).clear()
+            searchQuery = ""
+        }
+        if (backStack.lastOrNull() != destination) backStack.add(destination)
+    }
+    fun back() {
+        backStack.removeLastOrNull()
+    }
     var addingSong by remember { mutableStateOf<Song?>(null) }
     var nameRequest by remember { mutableStateOf<NameRequest?>(null) }
     var deleting by remember { mutableStateOf<PlaylistRef.User?>(null) }
@@ -121,7 +154,9 @@ fun LyraApp(
         )
     }
 
-    BackHandler(enabled = shownPlaylist != null && !nowPlayingOpen) { openPlaylist = null }
+    val loadedLibrary = (state as? LibraryUiState.Loaded)?.library
+
+    BackHandler(enabled = top != null && !nowPlayingOpen) { back() }
 
     Scaffold(
         topBar = {
@@ -129,14 +164,14 @@ fun LyraApp(
                 TopAppBar(
                     title = {
                         Text(
-                            shownPlaylist?.let { playlistTitle(it) } ?: stringResource(R.string.app_name),
+                            top?.let { destinationTitle(it, shownPlaylist, loadedLibrary) } ?: stringResource(R.string.app_name),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     },
                     navigationIcon = {
-                        if (shownPlaylist != null) {
-                            IconButton(onClick = { openPlaylist = null }) {
+                        if (top != null) {
+                            IconButton(onClick = { back() }) {
                                 Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = stringResource(R.string.action_back))
                             }
                         }
@@ -147,6 +182,10 @@ fun LyraApp(
                                 onRename = { nameRequest = NameRequest.Rename(shownPlaylist.id, shownPlaylist.name) },
                                 onDelete = { deleting = shownPlaylist },
                             )
+                        } else if (top != Destination.Search && loadedLibrary != null) {
+                            IconButton(onClick = { open(Destination.Search) }) {
+                                Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.action_search))
+                            }
                         }
                     },
                 )
@@ -178,26 +217,60 @@ fun LyraApp(
             onPlay = playerViewModel::play,
             modifier = Modifier.padding(innerPadding),
         ) { library ->
-            val playlist = shownPlaylist
-            if (playlist == null) {
-                LibraryTabs(
+            val onOpenArtist: (String) -> Unit = { open(Destination.Artist(it)) }
+            val onOpenAlbum: (Album) -> Unit = { open(Destination.Album(it.id)) }
+            when (val destination = top) {
+                null -> LibraryTabs(
                     library = library,
                     user = user,
                     onPlay = playerViewModel::play,
                     actions = actions,
-                    onOpenPlaylist = { openPlaylist = it },
+                    onOpenPlaylist = { open(Destination.Playlist(it)) },
                     onNewPlaylist = { nameRequest = NameRequest.Create(emptyList()) },
+                    onOpenArtist = onOpenArtist,
+                    onOpenAlbum = onOpenAlbum,
+                    onOpenGenre = { open(Destination.Genre(it)) },
                     pagerState = libraryPagerState,
                 )
-            } else {
-                PlaylistContent(
-                    playlist = playlist,
+                is Destination.Playlist -> shownPlaylist?.let { playlist ->
+                    PlaylistContent(
+                        playlist = playlist,
+                        library = library,
+                        user = user,
+                        userSongIds = userSongIds,
+                        onPlay = playerViewModel::play,
+                        actions = actions,
+                        onRemoveAt = { position -> userPlaylistId?.let { viewModel.removeFromPlaylist(it, position) } },
+                    )
+                }
+                is Destination.Artist -> ArtistDetail(
+                    name = destination.name,
                     library = library,
-                    user = user,
-                    userSongIds = userSongIds,
                     onPlay = playerViewModel::play,
                     actions = actions,
-                    onRemoveAt = { position -> userPlaylistId?.let { viewModel.removeFromPlaylist(it, position) } },
+                    onOpenAlbum = onOpenAlbum,
+                )
+                is Destination.Album -> AlbumDetail(
+                    albumId = destination.id,
+                    library = library,
+                    onPlay = playerViewModel::play,
+                    actions = actions,
+                    onOpenArtist = onOpenArtist,
+                )
+                is Destination.Genre -> GenreDetail(
+                    name = destination.name,
+                    library = library,
+                    onPlay = playerViewModel::play,
+                    actions = actions,
+                )
+                Destination.Search -> SearchScreen(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    library = library,
+                    onPlay = playerViewModel::play,
+                    actions = actions,
+                    onOpenArtist = onOpenArtist,
+                    onOpenAlbum = onOpenAlbum,
                 )
             }
         }
@@ -238,7 +311,7 @@ fun LyraApp(
             name = target.name,
             onConfirm = {
                 viewModel.deletePlaylist(target.id)
-                if ((openPlaylist as? PlaylistRef.User)?.id == target.id) openPlaylist = null
+                backStack.removeAll { ((it as? Destination.Playlist)?.ref as? PlaylistRef.User)?.id == target.id }
                 deleting = null
             },
             onDismiss = { deleting = null },
@@ -282,6 +355,15 @@ fun LyraApp(
             onRemove = playerViewModel::removeQueueItem,
         )
     }
+}
+
+@Composable
+private fun destinationTitle(destination: Destination, shownPlaylist: PlaylistRef?, library: Library?): String = when (destination) {
+    is Destination.Playlist -> playlistTitle(shownPlaylist ?: destination.ref)
+    is Destination.Artist -> destination.name
+    is Destination.Album -> library?.albums?.firstOrNull { it.id == destination.id }?.title.orEmpty()
+    is Destination.Genre -> destination.name
+    Destination.Search -> stringResource(R.string.action_search)
 }
 
 @Composable

@@ -82,7 +82,7 @@ internal fun SongList(
 }
 
 @Composable
-private fun SongRow(song: Song, onClick: () -> Unit, actions: SongActions, onRemove: (() -> Unit)?) {
+internal fun SongRow(song: Song, onClick: () -> Unit, actions: SongActions, onRemove: (() -> Unit)?) {
     var menuOpen by remember { mutableStateOf(false) }
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

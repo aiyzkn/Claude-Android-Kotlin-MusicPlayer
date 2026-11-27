@@ -97,7 +97,10 @@ fun LibraryTabs(
     onOpenPlaylist: (PlaylistRef) -> Unit,
     onNewPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
-    // プレイリストを開いて戻ったときに同じタブに戻れるよう、呼び出し側で持てるようにする
+    onOpenArtist: (String) -> Unit = {},
+    onOpenAlbum: (Album) -> Unit = {},
+    onOpenGenre: (String) -> Unit = {},
+    // 詳細を開いて戻ったときに同じタブに戻れるよう、呼び出し側で持てるようにする
     pagerState: PagerState = rememberLibraryPagerState(),
 ) {
     val favorites = remember(library, user.favoriteIds) { resolveSongs(user.favoriteIds, library.byId) }
@@ -133,10 +136,10 @@ fun LibraryTabs(
                     actions,
                     empty = stringResource(R.string.recent_empty),
                 )
-                LibraryTab.Artists -> ArtistList(library.artists)
-                LibraryTab.Albums -> AlbumGrid(library.albums)
+                LibraryTab.Artists -> ArtistList(library.artists, onOpenArtist)
+                LibraryTab.Albums -> AlbumGrid(library.albums, onOpenAlbum)
                 LibraryTab.Songs -> SongList(library.songs, onPlay, actions)
-                LibraryTab.Genres -> GenreList(library.genres)
+                LibraryTab.Genres -> GenreList(library.genres, onOpenGenre)
             }
         }
     }
@@ -189,7 +192,7 @@ fun rememberLibraryPagerState(): PagerState =
 internal fun nowEpochSeconds(): Long = System.currentTimeMillis() / 1000
 
 @Composable
-private fun ArtistList(artists: List<Artist>) {
+private fun ArtistList(artists: List<Artist>, onOpen: (String) -> Unit) {
     if (artists.isEmpty()) return Empty()
     LazyColumn(Modifier.fillMaxSize()) {
         items(artists, key = { it.name }) { artist ->
@@ -197,26 +200,28 @@ private fun ArtistList(artists: List<Artist>) {
                 headline = artist.name,
                 supporting = pluralStringResource(R.plurals.album_count, artist.albumCount, artist.albumCount) +
                     " · " + pluralStringResource(R.plurals.song_count, artist.songCount, artist.songCount),
+                onClick = { onOpen(artist.name) },
             )
         }
     }
 }
 
 @Composable
-private fun GenreList(genres: List<Genre>) {
+private fun GenreList(genres: List<Genre>, onOpen: (String) -> Unit) {
     if (genres.isEmpty()) return Empty()
     LazyColumn(Modifier.fillMaxSize()) {
         items(genres, key = { it.name }) { genre ->
             Row(
                 headline = genre.name,
                 supporting = pluralStringResource(R.plurals.song_count, genre.songCount, genre.songCount),
+                onClick = { onOpen(genre.name) },
             )
         }
     }
 }
 
 @Composable
-private fun AlbumGrid(albums: List<Album>) {
+private fun AlbumGrid(albums: List<Album>, onOpen: (Album) -> Unit) {
     if (albums.isEmpty()) return Empty()
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 160.dp),
@@ -229,7 +234,8 @@ private fun AlbumGrid(albums: List<Album>) {
             Box(
                 Modifier
                     .aspectRatio(1f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onOpen(album) },
                 contentAlignment = Alignment.BottomStart,
             ) {
                 Column(

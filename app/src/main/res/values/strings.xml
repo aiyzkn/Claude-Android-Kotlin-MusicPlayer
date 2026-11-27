@@ -45,6 +45,11 @@
     <string name="action_remove_from_queue">再生待ちから外す</string>
     <string name="action_reorder">ドラッグして並べ替え</string>
     <string name="now_playing">再生中</string>
+    <string name="action_search">検索</string>
+    <string name="search_hint">曲・アーティスト・アルバムを検索</string>
+    <string name="search_clear">入力を消す</string>
+    <string name="search_empty">見つかりませんでした</string>
+    <string name="detail_open_artist">アーティストを表示</string>
     <plurals name="song_count">
         <item quantity="one">%d 曲</item>
         <item quantity="other">%d 曲</item>
