@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自作のアイコン: 水色の円の中に、竪琴（Lyra）の形の 2 本の弧・横木・弦 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,24a30,30 0,1 1,0 60a30,30 0,1 1,0 -60z"
+        android:strokeWidth="3"
+        android:strokeColor="#FF33B5E5" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M42,38C36,46 38,62 46,70M66,38C72,46 70,62 62,70M44,70H64M44,42H64"
+        android:strokeLineCap="round"
+        android:strokeWidth="4"
+        android:strokeColor="#FF33B5E5" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M50,42V70M54,42V70M58,42V70"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFFFF" />
+</vector>
