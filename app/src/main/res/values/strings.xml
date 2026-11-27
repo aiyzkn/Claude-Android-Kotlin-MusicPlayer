@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lyra</string>
-    <string name="library_placeholder">ライブラリはまだありません</string>
+    <string name="tab_artists">アーティスト</string>
+    <string name="tab_albums">アルバム</string>
+    <string name="tab_songs">曲</string>
+    <string name="tab_genres">ジャンル</string>
+    <string name="library_empty">曲が見つかりません</string>
+    <string name="library_failed">曲を読み込めませんでした（%1$s）</string>
+    <string name="retry">再読み込み</string>
+    <string name="permission_rationale">端末の曲を一覧にするには、音楽とオーディオへのアクセスを許可してください</string>
+    <string name="permission_grant">許可する</string>
+    <plurals name="song_count">
+        <item quantity="one">%d 曲</item>
+        <item quantity="other">%d 曲</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%d 枚のアルバム</item>
+        <item quantity="other">%d 枚のアルバム</item>
+    </plurals>
 </resources>
