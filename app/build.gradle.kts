@@ -42,6 +42,11 @@ kotlin {
     }
 }
 
+// データベースの形を書き出し、版を上げるときの移行の確かめに使う
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -54,6 +59,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)

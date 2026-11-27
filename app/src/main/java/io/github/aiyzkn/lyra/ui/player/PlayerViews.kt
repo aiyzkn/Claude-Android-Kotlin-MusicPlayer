@@ -106,6 +106,8 @@ fun NowPlayingScreen(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     modifier: Modifier = Modifier,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
 ) {
     Surface(color = MaterialTheme.colorScheme.background, modifier = modifier.fillMaxSize()) {
         Column(
@@ -134,6 +136,12 @@ fun NowPlayingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+            ControlButton(
+                if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
+                if (isFavorite) R.string.action_unfavorite else R.string.action_favorite,
+                onToggleFavorite,
+                active = isFavorite,
             )
             Spacer(Modifier.weight(1f))
 

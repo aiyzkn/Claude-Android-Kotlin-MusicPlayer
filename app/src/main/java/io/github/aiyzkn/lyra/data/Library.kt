@@ -13,6 +13,8 @@ data class Song(
     val durationMs: Long,
     val trackNumber: Int,
     val uri: Uri?,
+    /** 端末に加わった時刻（エポック秒。`MediaStore` の `DATE_ADDED`）。分からなければ 0。 */
+    val dateAddedSec: Long = 0,
 )
 
 data class Album(
@@ -40,6 +42,9 @@ data class Library(
     val artists: List<Artist>,
     val genres: List<Genre>,
 ) {
+    /** ID から曲を引く表（プレイリスト・お気に入り・履歴を曲に置き換えるのに使う）。 */
+    val byId: Map<Long, Song> by lazy { songs.associateBy { it.id } }
+
     companion object {
         val EMPTY = Library(emptyList(), emptyList(), emptyList(), emptyList())
 
