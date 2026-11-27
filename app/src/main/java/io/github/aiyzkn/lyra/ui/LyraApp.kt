@@ -1,9 +1,11 @@
 package io.github.aiyzkn.lyra.ui
 
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -13,21 +15,41 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.aiyzkn.lyra.R
-import io.github.aiyzkn.lyra.ui.theme.LyraTheme
+import io.github.aiyzkn.lyra.data.audioPermission
+import io.github.aiyzkn.lyra.ui.library.LibraryContent
+import io.github.aiyzkn.lyra.ui.library.LibraryViewModel
 
 /**
- * アプリの最上位の画面。
- * いまは骨組みだけ（ライブラリのタブ・ミニプレーヤー・再生画面は、次の PR から足す）。
+ * アプリの最上位の画面。いまはライブラリのタブだけ（ミニプレーヤー・再生画面は次の PR から）。
+ * `viewModel()` は、`@AndroidEntryPoint` の Activity の中では Hilt の生成器を使う。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LyraApp() {
+fun LyraApp(viewModel: LibraryViewModel = viewModel()) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val permission = audioPermission()
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.onPermissionGranted()
+    }
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.onPermissionGranted()
+        } else {
+            launcher.launch(permission)
+        }
+    }
+
     Scaffold(
         topBar = {
             Column {
@@ -42,25 +64,11 @@ fun LyraApp() {
             }
         },
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.library_placeholder),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun LyraAppPreview() {
-    LyraTheme {
-        LyraApp()
+        LibraryContent(
+            state = state,
+            onRequestPermission = { launcher.launch(permission) },
+            onRetry = viewModel::refresh,
+            modifier = Modifier.padding(innerPadding),
+        )
     }
 }
