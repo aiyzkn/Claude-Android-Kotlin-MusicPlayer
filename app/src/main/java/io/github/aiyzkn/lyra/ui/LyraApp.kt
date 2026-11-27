@@ -55,6 +55,7 @@ import io.github.aiyzkn.lyra.ui.library.rememberLibraryPagerState
 import io.github.aiyzkn.lyra.ui.player.MiniPlayer
 import io.github.aiyzkn.lyra.ui.player.NowPlayingScreen
 import io.github.aiyzkn.lyra.ui.player.PlayerViewModel
+import io.github.aiyzkn.lyra.ui.player.QueueScreen
 import kotlinx.coroutines.flow.flowOf
 
 /** プレイリストの名前のダイアログで、何をするか。 */
@@ -77,7 +78,9 @@ fun LyraApp(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val player by playerViewModel.state.collectAsStateWithLifecycle()
+    val queue by playerViewModel.queue.collectAsStateWithLifecycle()
     var nowPlayingOpen by rememberSaveable { mutableStateOf(false) }
+    var queueOpen by rememberSaveable { mutableStateOf(false) }
     // 画面の行き来は、詳細の画面を足す PR で Navigation にする。それまでは、開いているプレイリストを状態で持つ
     var openPlaylist by remember { mutableStateOf<PlaylistRef?>(null) }
     var addingSong by remember { mutableStateOf<Song?>(null) }
@@ -113,6 +116,8 @@ fun LyraApp(
             isFavorite = user::isFavorite,
             onToggleFavorite = viewModel::toggleFavorite,
             onAddToPlaylist = { addingSong = it },
+            onPlayNext = playerViewModel::playNext,
+            onAddToQueue = playerViewModel::addToQueue,
         )
     }
 
@@ -258,6 +263,23 @@ fun LyraApp(
             onCycleRepeat = playerViewModel::cycleRepeat,
             isFavorite = songId != null && user.isFavorite(songId),
             onToggleFavorite = { songId?.let(viewModel::toggleFavorite) },
+            onOpenQueue = { queueOpen = true },
+        )
+    }
+
+    // 再生待ちは再生画面の上に重ねる（再生画面を閉じたら、いっしょに閉じる）
+    AnimatedVisibility(
+        visible = queueOpen && nowPlayingOpen && player.hasMedia,
+        enter = slideInVertically { it },
+        exit = slideOutVertically { it },
+    ) {
+        BackHandler { queueOpen = false }
+        QueueScreen(
+            queue = queue,
+            onClose = { queueOpen = false },
+            onPlay = playerViewModel::playQueueItem,
+            onMove = playerViewModel::moveQueueItem,
+            onRemove = playerViewModel::removeQueueItem,
         )
     }
 }

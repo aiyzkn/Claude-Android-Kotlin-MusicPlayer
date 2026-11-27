@@ -37,6 +37,14 @@
     <string name="playlist_delete_message">「%1$s」を削除しますか？（曲そのものは消えません）</string>
     <string name="favorites_empty">お気に入りはまだありません</string>
     <string name="recent_empty">まだ何も再生していません</string>
+    <string name="queue_title">再生待ち</string>
+    <string name="queue_empty">再生待ちに曲がありません</string>
+    <string name="action_queue">再生待ちを表示</string>
+    <string name="action_play_next">次に再生</string>
+    <string name="action_add_to_queue">再生待ちに追加</string>
+    <string name="action_remove_from_queue">再生待ちから外す</string>
+    <string name="action_reorder">ドラッグして並べ替え</string>
+    <string name="now_playing">再生中</string>
     <plurals name="song_count">
         <item quantity="one">%d 曲</item>
         <item quantity="other">%d 曲</item>

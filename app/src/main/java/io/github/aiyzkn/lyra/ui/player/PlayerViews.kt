@@ -108,6 +108,7 @@ fun NowPlayingScreen(
     modifier: Modifier = Modifier,
     isFavorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
+    onOpenQueue: () -> Unit = {},
 ) {
     Surface(color = MaterialTheme.colorScheme.background, modifier = modifier.fillMaxSize()) {
         Column(
@@ -137,12 +138,15 @@ fun NowPlayingScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            ControlButton(
-                if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
-                if (isFavorite) R.string.action_unfavorite else R.string.action_favorite,
-                onToggleFavorite,
-                active = isFavorite,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ControlButton(
+                    if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
+                    if (isFavorite) R.string.action_unfavorite else R.string.action_favorite,
+                    onToggleFavorite,
+                    active = isFavorite,
+                )
+                ControlButton(R.drawable.ic_queue_music, R.string.action_queue, onOpenQueue)
+            }
             Spacer(Modifier.weight(1f))
 
             // つまみを動かしている間は、つまみの位置を出し、離したときにシークする

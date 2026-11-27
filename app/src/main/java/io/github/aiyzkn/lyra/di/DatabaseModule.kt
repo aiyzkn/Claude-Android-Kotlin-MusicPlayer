@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.aiyzkn.lyra.data.db.LyraDatabase
+import io.github.aiyzkn.lyra.data.db.QueueDao
 import io.github.aiyzkn.lyra.data.db.UserLibraryDao
 import javax.inject.Singleton
 
@@ -21,4 +22,7 @@ object DatabaseModule {
 
     @Provides
     fun provideUserLibraryDao(db: LyraDatabase): UserLibraryDao = db.userLibraryDao()
+
+    @Provides
+    fun provideQueueDao(db: LyraDatabase): QueueDao = db.queueDao()
 }

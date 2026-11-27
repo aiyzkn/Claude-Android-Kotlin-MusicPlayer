@@ -47,6 +47,8 @@ class SongActions(
     val isFavorite: (songId: Long) -> Boolean,
     val onToggleFavorite: (songId: Long) -> Unit,
     val onAddToPlaylist: (Song) -> Unit,
+    val onPlayNext: (Song) -> Unit = {},
+    val onAddToQueue: (Song) -> Unit = {},
 ) {
     companion object {
         val NONE = SongActions(isFavorite = { false }, onToggleFavorite = {}, onAddToPlaylist = {})
@@ -94,6 +96,20 @@ private fun SongRow(song: Song, onClick: () -> Unit, actions: SongActions, onRem
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_play_next)) },
+                        onClick = {
+                            menuOpen = false
+                            actions.onPlayNext(song)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_add_to_queue)) },
+                        onClick = {
+                            menuOpen = false
+                            actions.onAddToQueue(song)
+                        },
+                    )
                     val favorite = actions.isFavorite(song.id)
                     DropdownMenuItem(
                         text = { Text(stringResource(if (favorite) R.string.action_unfavorite else R.string.action_favorite)) },
