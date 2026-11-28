@@ -1,5 +1,6 @@
 package io.github.aiyzkn.lyra.playback
 
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
@@ -7,6 +8,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.aiyzkn.lyra.data.QueueRepository
@@ -30,6 +32,7 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var userLibrary: UserLibraryRepository
     @Inject lateinit var queue: QueueRepository
+    @Inject lateinit var audioSession: AudioSession
 
     private var session: MediaSession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -108,9 +111,18 @@ class PlaybackService : MediaSessionService() {
             // イヤホンが抜けたら止める
             .setHandleAudioBecomingNoisy(true)
             .build()
+        // 画面から開くイコライザーと同じセッションにする
+        if (audioSession.id != NO_AUDIO_SESSION) useAudioSession(player, audioSession.id)
+        audioSession.announceOpen()
         player.addListener(historyListener)
         session = MediaSession.Builder(this, player).build()
         restoreQueue(player)
+    }
+
+    // セッションの ID の指定は Media3 では不安定 API の扱い（ExoPlayer の公開のメソッドだが、注釈が付いている）
+    @OptIn(UnstableApi::class)
+    private fun useAudioSession(player: ExoPlayer, id: Int) {
+        player.setAudioSessionId(id)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -126,6 +138,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         scope.cancel()
+        audioSession.announceClose()
         session?.run {
             player.removeListener(historyListener)
             player.release()

@@ -1,6 +1,8 @@
 package io.github.aiyzkn.lyra.ui
 
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,7 @@ import io.github.aiyzkn.lyra.data.Library
 import io.github.aiyzkn.lyra.data.PlaylistRef
 import io.github.aiyzkn.lyra.data.Song
 import io.github.aiyzkn.lyra.data.audioPermission
+import io.github.aiyzkn.lyra.playback.equalizerIntent
 import io.github.aiyzkn.lyra.ui.library.AlbumDetail
 import io.github.aiyzkn.lyra.ui.library.ArtistDetail
 import io.github.aiyzkn.lyra.ui.library.ConfirmDeletePlaylistDialog
@@ -64,6 +67,8 @@ import io.github.aiyzkn.lyra.ui.player.MiniPlayer
 import io.github.aiyzkn.lyra.ui.player.NowPlayingScreen
 import io.github.aiyzkn.lyra.ui.player.PlayerViewModel
 import io.github.aiyzkn.lyra.ui.player.QueueScreen
+import io.github.aiyzkn.lyra.ui.settings.SettingsScreen
+import io.github.aiyzkn.lyra.ui.settings.SettingsViewModel
 import kotlinx.coroutines.flow.flowOf
 
 /** ライブラリのタブの上に重ねて開く画面。 */
@@ -73,6 +78,7 @@ private sealed interface Destination {
     data class Album(val id: Long) : Destination
     data class Genre(val name: String) : Destination
     data object Search : Destination
+    data object Settings : Destination
 }
 
 /** プレイリストの名前のダイアログで、何をするか。 */
@@ -91,11 +97,13 @@ private sealed interface NameRequest {
 fun LyraApp(
     viewModel: LibraryViewModel = viewModel(),
     playerViewModel: PlayerViewModel = viewModel(),
+    settingsViewModel: SettingsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val player by playerViewModel.state.collectAsStateWithLifecycle()
     val queue by playerViewModel.queue.collectAsStateWithLifecycle()
+    val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     var nowPlayingOpen by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
     // 画面の行き来は、開いた画面の積み重ねで持つ（開くと積み、戻ると 1 つ外す）。
@@ -155,6 +163,16 @@ fun LyraApp(
     }
 
     val loadedLibrary = (state as? LibraryUiState.Loaded)?.library
+    // 結果は使わないが、呼び出し元を相手に伝えるため startActivityForResult で開く（equalizerIntent の注）
+    val equalizerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    val showEqualizer = {
+        try {
+            equalizerLauncher.launch(equalizerIntent(context, settingsViewModel.audioSessionId))
+        } catch (_: ActivityNotFoundException) {
+            // イコライザーのアプリが無い端末
+            Toast.makeText(context, R.string.equalizer_unavailable, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     BackHandler(enabled = top != null && !nowPlayingOpen) { back() }
 
@@ -182,7 +200,14 @@ fun LyraApp(
                                 onRename = { nameRequest = NameRequest.Rename(shownPlaylist.id, shownPlaylist.name) },
                                 onDelete = { deleting = shownPlaylist },
                             )
-                        } else if (top != Destination.Search && loadedLibrary != null) {
+                        } else if (top == null) {
+                            if (loadedLibrary != null) {
+                                IconButton(onClick = { open(Destination.Search) }) {
+                                    Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.action_search))
+                                }
+                            }
+                            MainMenu(onEqualizer = showEqualizer, onSettings = { open(Destination.Settings) })
+                        } else if (top != Destination.Search && top != Destination.Settings && loadedLibrary != null) {
                             IconButton(onClick = { open(Destination.Search) }) {
                                 Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.action_search))
                             }
@@ -210,6 +235,17 @@ fun LyraApp(
             }
         },
     ) { innerPadding ->
+        // 設定は曲の読み込み（権限）に関わらず開ける
+        if (top == Destination.Settings) {
+            SettingsScreen(
+                settings = settings,
+                onAccentChange = settingsViewModel::setAccent,
+                onAlbumLayoutChange = settingsViewModel::setAlbumLayout,
+                onOpenEqualizer = showEqualizer,
+                modifier = Modifier.padding(innerPadding),
+            )
+            return@Scaffold
+        }
         LibraryContent(
             state = state,
             onRequestPermission = { launcher.launch(permission) },
@@ -231,6 +267,7 @@ fun LyraApp(
                     onOpenAlbum = onOpenAlbum,
                     onOpenGenre = { open(Destination.Genre(it)) },
                     pagerState = libraryPagerState,
+                    albumLayout = settings.albumLayout,
                 )
                 is Destination.Playlist -> shownPlaylist?.let { playlist ->
                     PlaylistContent(
@@ -272,6 +309,7 @@ fun LyraApp(
                     onOpenArtist = onOpenArtist,
                     onOpenAlbum = onOpenAlbum,
                 )
+                Destination.Settings -> Unit
             }
         }
     }
@@ -364,6 +402,7 @@ private fun destinationTitle(destination: Destination, shownPlaylist: PlaylistRe
     is Destination.Album -> library?.albums?.firstOrNull { it.id == destination.id }?.title.orEmpty()
     is Destination.Genre -> destination.name
     Destination.Search -> stringResource(R.string.action_search)
+    Destination.Settings -> stringResource(R.string.action_settings)
 }
 
 @Composable
@@ -371,6 +410,27 @@ private fun playlistTitle(playlist: PlaylistRef): String = when (playlist) {
     PlaylistRef.Favorites -> stringResource(R.string.playlist_favorites)
     PlaylistRef.RecentlyAdded -> stringResource(R.string.playlist_recently_added)
     is PlaylistRef.User -> playlist.name
+}
+
+/** ライブラリの操作バーの「︙」。Apollo と同じく、イコライザーと設定を置く。 */
+@Composable
+private fun MainMenu(onEqualizer: () -> Unit, onSettings: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.action_equalizer)) }, onClick = {
+                open = false
+                onEqualizer()
+            })
+            DropdownMenuItem(text = { Text(stringResource(R.string.action_settings)) }, onClick = {
+                open = false
+                onSettings()
+            })
+        }
+    }
 }
 
 @Composable
