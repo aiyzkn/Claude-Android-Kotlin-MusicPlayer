@@ -39,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.aiyzkn.lyra.R
 import io.github.aiyzkn.lyra.data.Album
+import io.github.aiyzkn.lyra.data.AlbumLayout
 import io.github.aiyzkn.lyra.data.Artist
 import io.github.aiyzkn.lyra.data.Genre
 import io.github.aiyzkn.lyra.data.Library
@@ -102,6 +103,7 @@ fun LibraryTabs(
     onOpenGenre: (String) -> Unit = {},
     // 詳細を開いて戻ったときに同じタブに戻れるよう、呼び出し側で持てるようにする
     pagerState: PagerState = rememberLibraryPagerState(),
+    albumLayout: AlbumLayout = AlbumLayout.DEFAULT,
 ) {
     val favorites = remember(library, user.favoriteIds) { resolveSongs(user.favoriteIds, library.byId) }
     val recentlyPlayed = remember(library, user.recentlyPlayedIds) { resolveSongs(user.recentlyPlayedIds, library.byId) }
@@ -137,7 +139,10 @@ fun LibraryTabs(
                     empty = stringResource(R.string.recent_empty),
                 )
                 LibraryTab.Artists -> ArtistList(library.artists, onOpenArtist)
-                LibraryTab.Albums -> AlbumGrid(library.albums, onOpenAlbum)
+                LibraryTab.Albums -> when (albumLayout) {
+                    AlbumLayout.Grid -> AlbumGrid(library.albums, onOpenAlbum)
+                    AlbumLayout.List -> AlbumList(library.albums, onOpenAlbum)
+                }
                 LibraryTab.Songs -> SongList(library.songs, onPlay, actions)
                 LibraryTab.Genres -> GenreList(library.genres, onOpenGenre)
             }
@@ -215,6 +220,20 @@ private fun GenreList(genres: List<Genre>, onOpen: (String) -> Unit) {
                 headline = genre.name,
                 supporting = pluralStringResource(R.plurals.song_count, genre.songCount, genre.songCount),
                 onClick = { onOpen(genre.name) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumList(albums: List<Album>, onOpen: (Album) -> Unit) {
+    if (albums.isEmpty()) return Empty()
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(albums, key = { it.id }) { album ->
+            Row(
+                headline = album.title,
+                supporting = album.artist + " · " + pluralStringResource(R.plurals.song_count, album.songCount, album.songCount),
+                onClick = { onOpen(album) },
             )
         }
     }
