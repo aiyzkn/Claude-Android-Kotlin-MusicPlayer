@@ -65,6 +65,14 @@
     <string name="accent_red">赤</string>
     <string name="album_layout_grid">格子</string>
     <string name="album_layout_list">一覧</string>
+    <string name="widget_label_small">Lyra（4×1）</string>
+    <string name="widget_label_large">Lyra（4×2）</string>
+    <string name="widget_label_recent">Lyra 最近再生</string>
+    <string name="widget_nothing_playing">再生していません</string>
+    <string name="widget_open_app">押すと Lyra を開きます</string>
+    <string name="widget_now_playing_small_description">再生中の曲と操作（4×1）</string>
+    <string name="widget_now_playing_large_description">再生中の曲と操作（4×2）</string>
+    <string name="widget_recent_description">最近再生した曲。押すとその曲から再生</string>
     <plurals name="song_count">
         <item quantity="one">%d 曲</item>
         <item quantity="other">%d 曲</item>
