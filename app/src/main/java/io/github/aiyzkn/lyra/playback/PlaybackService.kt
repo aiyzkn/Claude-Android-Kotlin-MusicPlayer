@@ -13,6 +13,8 @@ import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.aiyzkn.lyra.data.QueueRepository
 import io.github.aiyzkn.lyra.data.UserLibraryRepository
+import io.github.aiyzkn.lyra.widget.WidgetUpdater
+import io.github.aiyzkn.lyra.widget.nowPlayingOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +35,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var userLibrary: UserLibraryRepository
     @Inject lateinit var queue: QueueRepository
     @Inject lateinit var audioSession: AudioSession
+    @Inject lateinit var widgets: WidgetUpdater
 
     private var session: MediaSession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -53,6 +56,7 @@ class PlaybackService : MediaSessionService() {
             session?.player?.let {
                 recordIfPlaying(it)
                 saveQueue(it)
+                publishToWidgets(it)
             }
         }
 
@@ -61,13 +65,23 @@ class PlaybackService : MediaSessionService() {
                 recordIfPlaying(it)
                 // 止めたときに、聴いていた位置を残す
                 if (!isPlaying) saveQueue(it)
+                publishToWidgets(it)
             }
+        }
+
+        override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+            session?.player?.let(::publishToWidgets)
         }
 
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             // 曲の追加・並べ替え・削除
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) session?.player?.let(::saveQueue)
         }
+    }
+
+    private fun publishToWidgets(player: Player) {
+        val metadata = player.mediaMetadata
+        widgets.publish(nowPlayingOf(metadata.title, metadata.artist, player.isPlaying))
     }
 
     private fun saveQueue(player: Player) {
@@ -87,6 +101,7 @@ class PlaybackService : MediaSessionService() {
                 player.prepare()
             }
             restored = true
+            publishToWidgets(player)
         }
     }
 
@@ -95,7 +110,10 @@ class PlaybackService : MediaSessionService() {
         if (!player.isPlaying || mediaId == recordedMediaId) return
         recordedMediaId = mediaId
         val songId = mediaId.toLongOrNull() ?: return
-        scope.launch { userLibrary.recordPlayed(songId) }
+        scope.launch {
+            userLibrary.recordPlayed(songId)
+            widgets.refreshRecent()
+        }
     }
 
     override fun onCreate() {
@@ -140,6 +158,8 @@ class PlaybackService : MediaSessionService() {
         scope.cancel()
         audioSession.announceClose()
         session?.run {
+            // 止まったことを出す（曲は残し、次に押せばサービスが起きて続きから鳴る）
+            widgets.publish(nowPlayingOf(player.mediaMetadata.title, player.mediaMetadata.artist, isPlaying = false))
             player.removeListener(historyListener)
             player.release()
             release()
